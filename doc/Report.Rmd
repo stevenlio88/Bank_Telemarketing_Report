@@ -1,0 +1,272 @@
+---
+title: "Bank Telemarketing Report"
+author: Steven Lio
+date: "01/20/2022"
+output: pdf_document
+bibliography: references.bib
+nocite: '@*'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+library(tidyverse)
+library(knitr)
+library(kableExtra)
+library(broom)
+library(caret)
+```
+
+## DSCI 542 Lab2
+
+-   GitHub Repo: [**https://github.com/stevenlio88/Bank_Telemarketing_Report.git**](https://github.com/stevenlio88/Bank_Telemarketing_Report.git){.uri}
+
+## Audience personas
+
+-   Walter Mitty is a Marketing Campaign Manager for a bank who manage telemarketing campaign. He has a background in finance and marketing and only recently heard about data science and how machine learning algorithms can help provide actionable insights from data and wants to know if the past telemarketing results collected from customers can help him to develop better telemarketing strategies and optimize budget spending as well as campaign success rate.
+
+&nbsp;
+
+## Report:
+
+
+## Bank Telemarketing Report
+
+&nbsp;
+
+## Executive Summary:
+
+We detailed the process of building a Logistic Regression Model and show that a out-of-box model with existing customer information can be good at predict the probability of a customer who will subscribe to the new campaign when contacted by the bank through telephone. The simple model used 20 attributes and have a accuracy of 91% and can recall 65% of all the customer who actually subscribed to previous campaign and similar performance on newly unseen data. From studying the model, we now know the best time of the year to run campaign should align with consumer price index which we can use from historical data. Tuesday and Wednesday are the best time for calls as it shows most successful rate are calls from those days. We can further improve the model and develop more flexible and effective telemarketing strategy by using other information from customer such as other demographic information, current product status and customer values. Then combine with the probability we predicted for each customer we can maximize our campaign success rate by going after the high value and high potential customers based on their customer segments in order to get them on board on tailored products designed to specifically to target them.
+
+\newpage
+
+## Introduction
+
+In this report we build a Logistic Regression Model that can predict the probability of a customer who will subscribe to the new campaign when contacted by the bank through a telephone. There are two main benefits of creating this successful prediction model, one is that now the marketing team can now know which customer are likely to subscribe to the new campaign and prioritize to contact them through telemarketing which will improve the campaign success rate as oppose to having cold calling every customer. The second benefit is that using regression model we can also gain insights in how different variables can influence the probability of a customer who will subscribe to the new campaign hence the marketing team can develop more efficient marketing strategies to target different customer group to optimize campaign budget usage.
+
+Logistic Regression model has been proven as one of the powerful machine algorithm which specialize in binary classification tasks as well as providing probability estimate on a success see [Moro, S., Cortez, P. & Rita, P. (2014). A data-driven approach to predict the success of bank telemarketing. Decision Support Systems. 62, 22-31](https://www.sciencedirect.com/science/article/abs/pii/S016792361400061X?via%3Dihub). For the problem we try to answer, the probability of success will be a customer will subscribe to the new campaign when contacted by the bank over the phone.
+
+
+
+## Methods  
+
+In this section we discuss the methodology and model building process.
+
+## Data  
+
+The data used in this report is provided by [UCI's Bank Marketing Data Set](http://archive.ics.uci.edu/ml/datasets/Bank+Marketing) which contains customers information and attributes regarding their previous contact with the bank and the output of the last contact. There are a total of 20 features for a given customer and his/her response to the previous outcome of the telemarketing call. In order to train the Logistic Regression, we will reserve 20% of the data as test case to validate our model performance hence 80% of the data is used as training data.  
+
+```{r Load_attr, echo=FALSE, include=FALSE}
+attrs <- read_csv("../doc/Attribute_Info.csv")
+```
+
+```{r, echo=FALSE}
+attrs %>%
+  kbl(caption = "Attribute from Banking Data.") %>%
+  kable_classic(full_width = F, html_font = "Cambria") %>%
+  kable_styling(latex_options = "HOLD_position")
+```
+
+\newpage
+
+## Exploratory Data Analysis  
+
+In this section we are going to explore few relationship between the variables and see how they are related to the customer's response to telemarketing.
+
+```{r Load_data, echo=FALSE, include=FALSE}
+df <- read_delim("../data/bank-additional-full.csv",delim=";")
+df$education <- ifelse(df$education=="illiterate","other",df$education)
+
+df$job <- fct_relevel(
+  df$job,
+  c("unemployed", "self-employed","student", "housemaid", "services", "admin.", "blue-collar", "technician", "management" ,"entrepreneur",
+    "retired", "unknown")
+)
+
+df$education <- fct_relevel(
+  df$education,
+  c("basic.4y","basic.6y","basic.9y","high.school","professional.course","university.degree","other","unknown")
+)
+
+df$default <- fct_relevel(
+  df$default,
+  c("no", "yes", "unknown")
+)
+
+df$housing <- fct_relevel(
+  df$housing,
+  c("no", "yes", "unknown")
+)
+
+df$marital <- fct_relevel(
+  df$marital,
+  c("single","married","divorced","unknown")
+)
+
+df$loan <- fct_relevel(
+  df$loan,
+  c("no", "yes", "unknown")
+)
+
+df$month <- fct_relevel(
+  df$month,
+  c("mar","apr","may","jun","jul","aug","sep","oct","nov","dec")
+)
+
+df$day_of_week <- fct_relevel(
+  df$day_of_week,
+  c("mon","tue","wed","thu","fri")
+)
+
+df$poutcome <- fct_relevel(
+  df$poutcome,
+  c("failure","success","nonexistent")
+)
+
+df$y <- fct_relevel(
+  df$y,
+  c("no","yes")
+)
+unique(df$marital)
+
+set.seed(2021)
+idx <- sample(1:nrow(df), size = 0.8*nrow(df))
+train_df <- df[idx,]
+test_df <- df[-idx,]
+
+```
+
+```{r, echo=FALSE, message = FALSE, fig.width=7, fig.height=4}
+ggplot(train_df, aes(x=toupper(y), fill=y)) + 
+    geom_bar(aes(y = (..count..)/sum(..count..))) + 
+    geom_text(aes(y = (..count..)/sum(..count..), label=paste0(round((..count..)/sum(..count..),3)*100,"%")), stat="count",nudge_y=0.05) +
+    scale_y_continuous(labels=scales::percent, limits=c(0, 1)) + 
+    labs(x="Previous Responded to Campaign", y="Relative Percentage") +
+    ggtitle("Distribution of Previous Campaign Responds") + 
+    theme(plot.title=element_text(hjust=0.5, face="bold"),
+          legend.position = "none")
+```
+
+We can see the previous telemarketing campaigns on average has 11.3% subscription rate.
+
+```{r, echo=FALSE, message = FALSE, fig.width=7, fig.height=4}
+ggplot(train_df, aes(x = age, fill=y)) +
+    geom_histogram(aes(y=..density..), position="identity", alpha=0.5)+
+    geom_density(alpha=0.6)+
+    scale_y_continuous(labels=scales::percent, limits=c(0, 0.05)) + 
+    labs(x="Customer Age", y="Relative Percentage") +
+    ggtitle("Customer Age vs Previous Campaign Responds") + 
+    theme(plot.title=element_text(hjust=0.5, face="bold"),
+          legend.position = "top",
+          legend.title=element_blank())
+```
+It is not apparent that customer's age are distinctly different on how they will react to telemarket campaign.
+
+```{r, echo=FALSE, message = FALSE, fig.width=7, fig.height=4}
+train_df %>% 
+  group_by(education, y) %>%
+  summarise(n = n()) %>%
+  mutate(freq = n / sum(n)) %>%
+  filter(y=="yes" & education != "unknown") %>%
+  ggplot(aes(x = education, y=freq, fill=education)) +
+  geom_bar(stat="identity") +
+  geom_text(aes(y =freq , label=paste0(round(freq,3)*100,"%")),nudge_y=0.01) +
+  scale_y_continuous(labels=scales::percent, limits=c(0, 0.2)) +
+  labs(y = "Percentage Subscribed", x = "Education Level", fill = "") +
+  ggtitle("Percentage of those Previously Subscribed by Education Level") +
+  theme(plot.title = element_text(hjust=0.5, face="bold"),
+        legend.position = "none",
+        legend.title = element_blank())
+```
+Customer's education level seems to may have contribute to the customer's decision on subscribing to the new campaign when contact through the phone. 13.8% of the customer who have a university degree are more likely to subscribe in previous campaign. Note the average subscription rate was 11.3%.
+
+## Model Building
+
+We build a Logistic Regression to predict the probability and the binary outcomes for customer who
+-   `yes`: subscribed to previous campaign after contact
+-   `no`: not subscribed to previous campaign after contact
+
+All 20 variables will be used in building the model, an partial output from the model is shown below:
+
+```{r, echo=FALSE}
+lm_model <- glm(y~.,family=binomial, data=train_df)
+
+tidy(lm_model) %>%
+  mutate_if(is.numeric, round, 3)
+
+glance(lm_model)
+```
+
+```{r, echo=FALSE}
+train_df <- train_df %>%
+  mutate(proba = predict(lm_model, type="response")) %>%
+  mutate(y_pred = ifelse(proba > 0.5, "yes", "no"))
+
+pospos <- sum(train_df$y_pred=="yes" & train_df$y=="yes")
+posneg <- sum(train_df$y_pred=="yes" & train_df$y=="no")
+negpos <- sum(train_df$y_pred=="no" & train_df$y=="yes")
+negneg <- sum(train_df$y_pred=="no" & train_df$y=="no")
+
+accuracy <- (pospos+negneg)/nrow(train_df)
+precision <- (pospos) / (pospos + negpos)
+recall <- (pospos) / (pospos + posneg)
+f1 <- 2 * precision*recall / (precision + recall)
+
+accuracy
+recall
+```
+
+The model performance will be assessed on `accuracy` (% of outcome are predicted by the model) and `recall` (% of the customer who actually subscribed are predicted correctly by the model).
+
+```{r, echo=FALSE, message=FALSE}
+test_df <- test_df %>%
+  mutate(proba = predict(lm_model, newdata=test_df, type="response")) %>%
+  mutate(y_pred = ifelse(proba > 0.5, "yes", "no"))
+
+pospos <- sum(test_df$y_pred=="yes" & test_df$y=="yes")
+posneg <- sum(test_df$y_pred=="yes" & test_df$y=="no")
+negpos <- sum(test_df$y_pred=="no" & test_df$y=="yes")
+negneg <- sum(test_df$y_pred=="no" & test_df$y=="no")
+
+accuracy <- (pospos+negneg)/nrow(test_df)
+precision <- (pospos) / (pospos + negpos)
+recall <- (pospos) / (pospos + posneg)
+f1 <- 2 * precision*recall / (precision + recall)
+
+accuracy
+recall
+```
+
+## Results
+
+The base Logistic Regression model above has an accuracy of 91.1% and a recall rate of 67%. Hence the model is successfully classify customers 91.1% of the time for their actual decision from previous telemarketing campaign, the model is also successfully recalled 65% of those who actually subscribed previously. The model also have a accuracy of 91.0% and recalled 65% from new data that is not used in training the model.
+
+This shows that a simple robust Logistic Regression can be successful to predict the output of customer's decision from a telemarketing campaign and perform just as well on new data. Hence we can use this model to calculate the probability of the customer who will subscribe to the next telemarketing and we can create a list of highly potential customers and those who are least likely. Further more we can combine the probability along with other customer values attribute such as customer tenure, account values and their number of financial products purchased. Then we can further be more efficient at gaining high value and high potential customer to maximize the campaign effectiveness. 
+
+```{r, echo=FALSE, message=FALSE, fig.height=5, fig.height=5}
+top_coef <- coef(lm_model) %>% 
+  sort(decreasing = TRUE) %>% 
+  head(15) %>% 
+  data.frame()
+colnames(top_coef) <- "value"
+top_coef$coef <- rownames(top_coef) 
+
+top_coef %>% 
+  ggplot(aes(y=reorder(coef,value), x = value)) +
+  geom_bar(stat="identity") +
+  labs(x="Coefficient Magnitude (Greater the more important)", y="Coefficients") +
+  ggtitle("Top 15 Important Variables From Logistic Model") + 
+  theme(plot.title=element_text(hjust=0.5, face="bold"))
+```
+The graph above showed the top 15 variables (order by coefficient magnitude) that are important and significant to the model in the prediction. We can see that `cons.price.idx` - the quarterly consumer price index rank as the top variable in predicting the customer's decision. Note that the second variable is `poutcomesuccess` which is the outcome from previous marketing campaign which is not necessary available for all new customers.
+
+Also The timing variables `day_of_weekwed`, `day_of_weektue` hinting that campaigns ran on Tuesday and Wednesday seems to have more successful with customer's subscription to a telemarketing campaign hence prioritize on increase the number of calls during these two days would improve overall success rate.
+
+`Education` as shown are also one of the top variable in predicting customer's decision at varies degree. These variables can help us to create customer segments along and develop more tailored products/campaigns for different customer segments. But it may requires further analysis to have a more meaningful conclusion.
+
+## Conclusion
+
+Overall, a straight out-of-box Logistic Regression model with the variables collected can already be successful at predicting the outcome of customer's decision in the telemarketing campaign. From the model we can now predict the probability of a customer who will subscribe from the telemarketing campaign as well as calls on Tuesday and Wednesday are more likely to be successful than the other days. Also best campaign run time should be check against the quarterly consumer price index to gauge customer's sensitivity to consumer prices to pick the time of the year for the best successful campaign.
+
+Further work can be done to assess other information we could be used in the model to further refine the model performance. Some variables can be used are `gender`, `ethnicity`, `caller's gender`, `preferred language`, `Previous Campaign Type` etc. We can also create customer segments along with customer values so that we can maximize the potential profits from telemarketing campaign, with the probability predicted from the model we can be most efficient and develop effective and flexible telemarketing strategies and optimize campaign budget and ROI.
+
+## References
