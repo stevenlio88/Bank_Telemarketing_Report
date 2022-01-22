@@ -159,7 +159,7 @@ ggplot(train_df, aes(x = age, fill=y)) +
           legend.position = "top",
           legend.title=element_blank())
 ```
-It is not apparent that customer's age are distinctly different on how they will react to telemarket campaign.
+It is not apparent that customer's age are distinctly different on how they will react to telemarketing campaign.
 
 ```{r, echo=FALSE, message = FALSE, fig.width=7, fig.height=4}
 train_df %>% 
@@ -171,6 +171,7 @@ train_df %>%
   geom_bar(stat="identity") +
   geom_text(aes(y =freq , label=paste0(round(freq,3)*100,"%")),nudge_y=0.01) +
   scale_y_continuous(labels=scales::percent, limits=c(0, 0.2)) +
+  scale_x_discrete(guide = guide_axis(n.dodge = 2)) + 
   labs(y = "Percentage Subscribed", x = "Education Level", fill = "") +
   ggtitle("Percentage of those Previously Subscribed by Education Level") +
   theme(plot.title = element_text(hjust=0.5, face="bold"),
